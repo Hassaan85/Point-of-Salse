@@ -1,0 +1,125 @@
+-- SQL Server schema for POS
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+IF OBJECT_ID('dbo.Roles', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Roles (
+    RoleId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    Name NVARCHAR(50) NOT NULL UNIQUE
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.Users', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Users (
+    UserId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    Username NVARCHAR(100) NOT NULL UNIQUE,
+    PasswordHash VARBINARY(256) NOT NULL,
+    PasswordSalt VARBINARY(128) NOT NULL,
+    FullName NVARCHAR(200) NOT NULL,
+    RoleId INT NOT NULL CONSTRAINT FK_Users_Roles FOREIGN KEY REFERENCES dbo.Roles(RoleId),
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Users_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.Customers', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Customers (
+    CustomerId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    Name NVARCHAR(200) NOT NULL,
+    Email NVARCHAR(200) NULL,
+    Phone NVARCHAR(50) NULL,
+    LoyaltyPoints INT NOT NULL CONSTRAINT DF_Customers_Loyalty DEFAULT 0,
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Customers_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.Products', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Products (
+    ProductId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    Name NVARCHAR(200) NOT NULL,
+    SKU NVARCHAR(100) NOT NULL UNIQUE,
+    Barcode NVARCHAR(128) NULL,
+    Price DECIMAL(18,2) NOT NULL,
+    TaxRate DECIMAL(5,2) NOT NULL CONSTRAINT DF_Products_Tax DEFAULT 0,
+    ReorderThreshold INT NOT NULL CONSTRAINT DF_Products_Reorder DEFAULT 0,
+    IsActive BIT NOT NULL CONSTRAINT DF_Products_IsActive DEFAULT 1,
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Products_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+  CREATE INDEX IX_Products_SKU ON dbo.Products(SKU);
+  CREATE INDEX IX_Products_Barcode ON dbo.Products(Barcode);
+END
+GO
+
+IF OBJECT_ID('dbo.Inventory', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Inventory (
+    InventoryId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    ProductId INT NOT NULL CONSTRAINT FK_Inventory_Products FOREIGN KEY REFERENCES dbo.Products(ProductId),
+    Quantity INT NOT NULL CONSTRAINT DF_Inventory_Qty DEFAULT 0,
+    UpdatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Inventory_UpdatedAt DEFAULT SYSUTCDATETIME()
+  );
+  CREATE UNIQUE INDEX UX_Inventory_ProductId ON dbo.Inventory(ProductId);
+END
+GO
+
+IF OBJECT_ID('dbo.StockHistory', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.StockHistory (
+    StockHistoryId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    ProductId INT NOT NULL CONSTRAINT FK_StockHistory_Products FOREIGN KEY REFERENCES dbo.Products(ProductId),
+    ChangeQty INT NOT NULL,
+    Reason NVARCHAR(200) NOT NULL,
+    ReferenceId INT NULL,
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_StockHistory_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.Sales', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Sales (
+    SaleId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    UserId INT NOT NULL CONSTRAINT FK_Sales_Users FOREIGN KEY REFERENCES dbo.Users(UserId),
+    CustomerId INT NULL CONSTRAINT FK_Sales_Customers FOREIGN KEY REFERENCES dbo.Customers(CustomerId),
+    Subtotal DECIMAL(18,2) NOT NULL,
+    Discount DECIMAL(18,2) NOT NULL CONSTRAINT DF_Sales_Discount DEFAULT 0,
+    Tax DECIMAL(18,2) NOT NULL,
+    Total DECIMAL(18,2) NOT NULL,
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Sales_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.SaleItems', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.SaleItems (
+    SaleItemId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    SaleId INT NOT NULL CONSTRAINT FK_SaleItems_Sales FOREIGN KEY REFERENCES dbo.Sales(SaleId),
+    ProductId INT NOT NULL CONSTRAINT FK_SaleItems_Products FOREIGN KEY REFERENCES dbo.Products(ProductId),
+    Quantity INT NOT NULL,
+    UnitPrice DECIMAL(18,2) NOT NULL,
+    Discount DECIMAL(18,2) NOT NULL CONSTRAINT DF_SaleItems_Discount DEFAULT 0,
+    TaxAmount DECIMAL(18,2) NOT NULL,
+    LineTotal DECIMAL(18,2) NOT NULL
+  );
+END
+GO
+
+IF OBJECT_ID('dbo.Payments', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.Payments (
+    PaymentId INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    SaleId INT NOT NULL CONSTRAINT FK_Payments_Sales FOREIGN KEY REFERENCES dbo.Sales(SaleId),
+    Method NVARCHAR(50) NOT NULL,
+    Amount DECIMAL(18,2) NOT NULL,
+    CreatedAt DATETIME2(3) NOT NULL CONSTRAINT DF_Payments_CreatedAt DEFAULT SYSUTCDATETIME()
+  );
+END
+GO
