@@ -1,0 +1,39 @@
+version: '3.9'
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: pos_sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Your_strong_password123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./mssql-data:/var/opt/mssql
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ../database:/docker-entrypoint-initdb.d/scripts:ro
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "Your_strong_password123!", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.api
+    container_name: pos_api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=PosDb;User Id=sa;Password=Your_strong_password123!;TrustServerCertificate=True;
+      - Jwt__Issuer=PosIssuer
+      - Jwt__Audience=PosAudience
+      - Jwt__Key=SuperSecretKeyChangeMe
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    ports:
+      - "5000:8080"
+    restart: unless-stopped
+volumes:
+  mssql-data:
